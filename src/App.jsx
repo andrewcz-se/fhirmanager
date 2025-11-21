@@ -3,7 +3,8 @@ import {
   User, Calendar, Activity, Send, CheckCircle, AlertCircle, 
   FileJson, Copy, Search, Users, PlusCircle, ChevronRight,
   MapPin, Phone, Syringe, Pill, ChevronDown, ChevronUp, Fingerprint,
-  ShieldAlert, CalendarClock, Stethoscope, Mail, XCircle, AlertTriangle // New icons
+  ShieldAlert, CalendarClock, Stethoscope, Mail, XCircle, AlertTriangle,
+  ClipboardList // New icon for Procedures
 } from 'lucide-react';
 
 export default function App() {
@@ -44,7 +45,7 @@ export default function App() {
 
   // --- CANCELLATION STATE ---
   const [cancelState, setCancelState] = useState({
-    id: null, // Appointment ID being cancelled
+    id: null, 
     reason: ''
   });
 
@@ -67,6 +68,7 @@ export default function App() {
   const [medicationCache, setMedicationCache] = useState({}); 
   const [allergyCache, setAllergyCache] = useState({}); 
   const [appointmentCache, setAppointmentCache] = useState({});
+  const [procedureCache, setProcedureCache] = useState({}); // New Cache
 
   // --- HANDLERS: CREATE PATIENT ---
   const handleCreateChange = (e) => {
@@ -209,7 +211,6 @@ export default function App() {
   const handleCancelAppt = async (patientId, originalAppt) => {
     if (!cancelState.reason.trim()) return;
 
-    // Construct Updated Resource
     const updatedAppt = {
       ...originalAppt,
       status: 'cancelled',
@@ -226,19 +227,13 @@ export default function App() {
       if (!res.ok) throw new Error(`Failed to cancel: ${res.status}`);
       const finalAppt = await res.json();
 
-      // Update Local Cache so UI updates immediately
       setAppointmentCache(prev => {
         const patientData = prev[patientId]?.data;
         if (!patientData) return prev;
-
         const newAppts = patientData.appointments.map(a => a.id === finalAppt.id ? finalAppt : a);
-        return {
-           ...prev,
-           [patientId]: { ...prev[patientId], data: { ...patientData, appointments: newAppts } }
-        };
+        return { ...prev, [patientId]: { ...prev[patientId], data: { ...patientData, appointments: newAppts } } };
       });
 
-      // Reset Cancel State
       setCancelState({ id: null, reason: '' });
 
     } catch (error) {
@@ -294,31 +289,26 @@ export default function App() {
     if (expandedSection === key) { setExpandedSection(null); return; }
     setExpandedSection(key);
 
-    if (type === 'imm' && !immunizationCache[patientId]) {
-        setImmunizationCache(prev => ({ ...prev, [patientId]: { status: 'loading' } }));
-        try {
-          const res = await fetch(`https://hapi.fhir.org/baseR4/Immunization?patient=${patientId}&_sort=-date`, { headers: { 'Accept': 'application/fhir+json' } });
-          if(!res.ok) throw new Error(res.status);
-          const b = await res.json();
-          setImmunizationCache(prev => ({ ...prev, [patientId]: { status: 'success', data: (b.entry||[]).map(e=>e.resource) } }));
-        } catch (e) { setImmunizationCache(prev => ({ ...prev, [patientId]: { status: 'error', error: e.message } })); }
-    } else if (type === 'med' && !medicationCache[patientId]) {
-        setMedicationCache(prev => ({ ...prev, [patientId]: { status: 'loading' } }));
-        try {
-          const res = await fetch(`https://hapi.fhir.org/baseR4/MedicationRequest?patient=${patientId}`, { headers: { 'Accept': 'application/fhir+json' } });
-          if(!res.ok) throw new Error(res.status);
-          const b = await res.json();
-          setMedicationCache(prev => ({ ...prev, [patientId]: { status: 'success', data: (b.entry||[]).map(e=>e.resource) } }));
-        } catch (e) { setMedicationCache(prev => ({ ...prev, [patientId]: { status: 'error', error: e.message } })); }
-    } else if (type === 'allergy' && !allergyCache[patientId]) {
-        setAllergyCache(prev => ({ ...prev, [patientId]: { status: 'loading' } }));
-        try {
-          const res = await fetch(`https://hapi.fhir.org/baseR4/AllergyIntolerance?patient=${patientId}`, { headers: { 'Accept': 'application/fhir+json' } });
-          if(!res.ok) throw new Error(res.status);
-          const b = await res.json();
-          setAllergyCache(prev => ({ ...prev, [patientId]: { status: 'success', data: (b.entry||[]).map(e=>e.resource) } }));
-        } catch (e) { setAllergyCache(prev => ({ ...prev, [patientId]: { status: 'error', error: e.message } })); }
-    } else if (type === 'appt' && !appointmentCache[patientId]) {
+    // Helper for simple fetches
+    const simpleFetch = async (resourceType, cache, setCache) => {
+        if (!cache[patientId]) {
+            setCache(prev => ({ ...prev, [patientId]: { status: 'loading' } }));
+            try {
+                // Default sort by date for clinical resources
+                const sortParam = resourceType === 'MedicationRequest' ? '' : '&_sort=-date';
+                const res = await fetch(`https://hapi.fhir.org/baseR4/${resourceType}?patient=${patientId}${sortParam}`, { headers: { 'Accept': 'application/fhir+json' } });
+                if(!res.ok) throw new Error(res.status);
+                const b = await res.json();
+                setCache(prev => ({ ...prev, [patientId]: { status: 'success', data: (b.entry||[]).map(e=>e.resource) } }));
+            } catch (e) { setCache(prev => ({ ...prev, [patientId]: { status: 'error', error: e.message } })); }
+        }
+    };
+
+    if (type === 'imm') simpleFetch('Immunization', immunizationCache, setImmunizationCache);
+    else if (type === 'med') simpleFetch('MedicationRequest', medicationCache, setMedicationCache);
+    else if (type === 'allergy') simpleFetch('AllergyIntolerance', allergyCache, setAllergyCache);
+    else if (type === 'proc') simpleFetch('Procedure', procedureCache, setProcedureCache);
+    else if (type === 'appt' && !appointmentCache[patientId]) {
         setAppointmentCache(prev => ({ ...prev, [patientId]: { status: 'loading' } }));
         try {
           const res = await fetch(`https://hapi.fhir.org/baseR4/Appointment?patient=${patientId}&_sort=-date&_include=Appointment:actor`, { headers: { 'Accept': 'application/fhir+json' } });
@@ -410,6 +400,39 @@ export default function App() {
         severity: r.severity || ''
     }));
     return { name, clinicalStatus, type, category, criticality, reactions, recordedDate, onset };
+  };
+
+  const getProcedureDetails = (proc) => {
+    // 1. Category
+    let category = 'Uncategorized';
+    if (proc.category) {
+        category = proc.category.text || proc.category.coding?.[0]?.display || proc.category.coding?.[0]?.code || category;
+        // Add system if available in coding
+        const sys = proc.category.coding?.[0]?.system;
+        if(sys) category += ` (${sys.split('/').pop()})`;
+    }
+
+    // 2. Code (Name of Procedure)
+    let code = 'Unknown Procedure';
+    let codeDetails = '';
+    if (proc.code) {
+        code = proc.code.text || proc.code.coding?.[0]?.display || 'Unknown Procedure';
+        const c = proc.code.coding?.[0];
+        if (c) {
+            codeDetails = `${c.code} [${c.system}]`;
+        }
+    }
+
+    // 3. Performed Date
+    let performed = 'Unknown Date';
+    if (proc.performedDateTime) performed = new Date(proc.performedDateTime).toLocaleString();
+    else if (proc.performedPeriod) performed = `${new Date(proc.performedPeriod.start).toLocaleDateString()} - ${new Date(proc.performedPeriod.end).toLocaleDateString()}`;
+    else if (proc.performedString) performed = proc.performedString;
+
+    // 4. Performer
+    const performer = proc.performer?.[0]?.actor?.display || 'Unknown Performer';
+
+    return { status: proc.status, category, code, codeDetails, performed, performer };
   };
 
   return (
@@ -692,6 +715,17 @@ export default function App() {
                                 {expandedSection === `${patient.id}-appt` ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                             </button>
 
+                            {/* Procedures Button */}
+                            <button 
+                                onClick={() => toggleSection(patient.id, 'proc')}
+                                className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg transition-all
+                                    ${expandedSection === `${patient.id}-proc` ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}
+                                `}
+                            >
+                                <ClipboardList className="w-4 h-4" /> Procedures
+                                {expandedSection === `${patient.id}-proc` ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                            </button>
+
                             {/* Allergies Button */}
                             <button 
                                 onClick={() => toggleSection(patient.id, 'allergy')}
@@ -862,6 +896,48 @@ export default function App() {
                                                                 )}
                                                             </>
                                                         )}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
+                             )}
+                        </div>
+                      )}
+
+                      {/* Procedures Panel (NEW) */}
+                      {expandedSection === `${patient.id}-proc` && (
+                        <div className="bg-indigo-50 border-t border-indigo-100 p-4 animate-in slide-in-from-top-2">
+                             {(!procedureCache[patient.id] || procedureCache[patient.id].status === 'loading') && (
+                                <div className="flex items-center justify-center py-4 text-indigo-600 gap-2"><div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" /><span className="text-sm">Loading records...</span></div>
+                             )}
+                             {procedureCache[patient.id]?.status === 'error' && <div className="flex items-center gap-2 text-red-600 text-sm p-2 bg-red-50 rounded border border-red-100"><AlertCircle className="w-4 h-4" />{procedureCache[patient.id].error}</div>}
+                             {procedureCache[patient.id]?.status === 'success' && (
+                                <div>
+                                    {procedureCache[patient.id].data.length === 0 ? (
+                                        <p className="text-slate-500 text-sm text-center py-2 italic">No procedures found for this patient.</p>
+                                    ) : (
+                                        <div className="space-y-3">
+                                            {procedureCache[patient.id].data.map((proc) => {
+                                                const details = getProcedureDetails(proc);
+                                                return (
+                                                    <div key={proc.id} className="bg-white p-3 rounded border border-indigo-100 shadow-sm">
+                                                        <div className="flex justify-between items-start">
+                                                            <h5 className="font-medium text-slate-800 text-sm">{details.code}</h5>
+                                                            <span className={`text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded ${
+                                                                details.status === 'completed' ? 'bg-green-100 text-green-700' : 
+                                                                details.status === 'in-progress' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-500'
+                                                            }`}>
+                                                                {details.status}
+                                                            </span>
+                                                        </div>
+                                                        <div className="text-xs text-slate-600 mt-1 space-y-1">
+                                                            <p><span className="font-semibold text-slate-500">Date:</span> {details.performed}</p>
+                                                            <p><span className="font-semibold text-slate-500">Category:</span> {details.category}</p>
+                                                            {details.codeDetails && <p className="font-mono text-[10px] text-slate-400">{details.codeDetails}</p>}
+                                                            {details.performer !== 'Unknown Performer' && <p><span className="font-semibold text-slate-500">Performer:</span> {details.performer}</p>}
+                                                        </div>
                                                     </div>
                                                 );
                                             })}
