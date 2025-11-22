@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Oracle Health (Cerner Ignite) R4 READ Request Builder</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      margin: 0;
+      padding: 0;
+      background: #f5f7fb;
+      color: #111827;
+    }
+    .app {
+      max-width: 1000px;
+      margin: 2rem auto;
+      padding: 2rem;
+      background: #ffffff;
+      border-radius: 12px;
+      box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+    }
+    h1 {
+      margin-top: 0;
+      font-size: 1.8rem;
+    }
+    p {
+      margin-top: 0.25rem;
+      color: #4b5563;
+    }
+    label {
+      font-size: 0.9rem;
+      font-weight: 600;
+      display: block;
+      margin-bottom: 0.25rem;
+    }
+    input[type="text"],
+    input[type="url"],
+    select,
+    textarea {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 0.5rem 0.65rem;
+      border-radius: 8px;
+      border: 1px solid #d1d5db;
+      font-size: 0.9rem;
+    }
+    textarea {
+      min-height: 120px;
+      resize: vertical;
+      font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 0.85rem;
+      background: #f9fafb;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 1rem;
+    }
+    .section-title {
+      margin-top: 2rem;
+      margin-bottom: 0.5rem;
+      font-size: 1.1rem;
+      font-weight: 700;
+      border-bottom: 1px solid #e5e7eb;
+      padding-bottom: 0.25rem;
+    }
+    .radio-row {
+      display: flex;
+      gap: 1.5rem;
+      align-items: center;
+      margin-top: 0.75rem;
+      margin-bottom: 0.75rem;
+    }
+    .radio-row label {
+      font-weight: 500;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      margin-bottom: 0;
+    }
+    .radio-row input[type="radio"] {
+      margin: 0;
+    }
+    button {
+      border: none;
+      border-radius: 999px;
+      padding: 0.55rem 1.4rem;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+    button.primary {
+      background: #2563eb;
+      color: #ffffff;
+    }
+    button.secondary {
+      background: #e5e7eb;
+      color: #111827;
+    }
+    button.small {
+      padding: 0.35rem 0.9rem;
+      font-size: 0.8rem;
+      border-radius: 999px;
+    }
+    .btn-row {
+      margin-top: 1rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+    }
+    .small-note {
+      font-size: 0.8rem;
+      color: #6b7280;
+      margin-top: 0.15rem;
+    }
+    .param-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr auto;
+      gap: 0.5rem;
+      margin-bottom: 0.5rem;
+      align-items: center;
+    }
+    .chip {
+      display: inline-flex;
+      padding: 0.15rem 0.45rem;
+      border-radius: 999px;
+      background: #eef2ff;
+      color: #4338ca;
+      font-size: 0.75rem;
+      font-weight: 600;
+      margin-left: 0.35rem;
+    }
+    .copy-btn {
+      float: right;
+      margin-top: -0.2rem;
+      margin-bottom: 0.3rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <h1>Oracle Health (Cerner Ignite) R4 READ Request Builder</h1>
+    <p>
+      Build <strong>FHIR R4 GET</strong> requests targeting the
+      <strong>Oracle Health (Cerner) Open Sandbox</strong>.
+      This tool generates URLs, curl commands and JSON request descriptors for read-only access.
+    </p>
+
+    <div class="section-title">Connection & Resource</div>
+    <div class="grid">
+      <div>
+        <label for="baseUrl">FHIR Base URL</label>
+        <input
+          id="baseUrl"
+          type="url"
+          value="https://fhir-open.cerner.com/r4/ec2458f2-1e24-41c8-b71b-0e701af7583d"
+        />
+
+      </div>
+      <div>
+        <label for="resourceType">Resource Type</label>
+        <select id="resourceType">
+          <optgroup label="Core">
+            <option value="Patient">Patient</option>
+            <option value="Practitioner">Practitioner</option>
+            <option value="Encounter">Encounter</option>
+            <option value="Location">Location</option>
+            <option value="Organization">Organization</option>
+            <option value="RelatedPerson">RelatedPerson</option>
+          </optgroup>
+          <optgroup label="Clinical">
+            <option value="AllergyIntolerance">AllergyIntolerance</option>
+            <option value="Condition">Condition</option>
+            <option value="Procedure">Procedure</option>
+            <option value="Observation">Observation</option>
+            <option value="Immunization">Immunization</option>
+            <option value="Medication">Medication</option>
+            <option value="MedicationRequest">MedicationRequest</option>
+            <option value="MedicationStatement">MedicationStatement</option>
+            <option value="DiagnosticReport">DiagnosticReport</option>
+          </optgroup>
+          <optgroup label="Scheduling">
+            <option value="Appointment">Appointment</option>
+            <option value="Schedule">Schedule</option>
+            <option value="Slot">Slot</option>
+          </optgroup>
+          <optgroup label="Documents & Financial">
+            <option value="DocumentReference">DocumentReference</option>
+            <option value="Coverage">Coverage</option>
+          </optgroup>
+          <optgroup label="Other">
+            <option value="Custom">Custom (type from text)</option>
+          </optgroup>
+        </select>
+      </div>
+      <div id="customTypeWrapper" style="display:none;">
+        <label for="customResourceType">Custom Resource Type</label>
+        <input id="customResourceType" type="text" placeholder="e.g. Goal" />
+        <div class="small-note">Used when “Custom” is selected above.</div>
+      </div>
+      <div>
+        <label for="authToken">OAuth Access Token (optional)</label>
+        <input
+          id="authToken"
+          type="text"
+          placeholder="Paste Bearer token if needed"
+        />
+        <div class="small-note">
+          If provided, an <code>Authorization: Bearer &lt;token&gt;</code> header
+          will be added to the curl and JSON descriptor.
+        </div>
+      </div>
+    </div>
+
+    <div class="section-title">Request Mode</div>
+    <div class="radio-row">
+      <label>
+        <input type="radio" name="mode" id="modeId" value="id" checked />
+        Read by ID
+        <span class="chip">GET /&lt;resource&gt;/&lt;id&gt;</span>
+      </label>
+      <label>
+        <input type="radio" name="mode" id="modeSearch" value="search" />
+        Search
+        <span class="chip">GET /&lt;resource&gt;?param=value</span>
+      </label>
+    </div>
+
+    <div id="byIdPanel">
+      <label for="resourceId">Resource ID</label>
+      <input id="resourceId" type="text" placeholder="e.g. 12345678" />
+      <div class="small-note">
+        Builds: <code>GET &lt;base&gt;/&lt;resourceType&gt;/&lt;id&gt;</code>
+      </div>
+    </div>
+
+    <div id="searchPanel" style="display:none; margin-top:0.75rem;">
+      <label>Search Parameters</label>
+      <div id="paramContainer"></div>
+      <button type="button" class="secondary small" id="addParamBtn">
+        ➕ Add parameter
+      </button>
+      <div class="small-note" style="margin-top:0.4rem;">
+        Examples: <code>name=Smith</code>, <code>birthdate=eq1970-01-01</code>,
+        <code>patient=12345</code>, <code>category=laboratory</code>.
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button type="button" class="primary" id="buildBtn">
+        ⚙️ Build GET Request
+      </button>
+      <button type="button" class="secondary" id="clearBtn">
+        🧹 Clear outputs
+      </button>
+    </div>
+
+    <div class="section-title">Final GET URL</div>
+    <button type="button" class="secondary small copy-btn" data-target="finalUrl">
+      Copy
+    </button>
+    <input id="finalUrl" type="text" readonly />
+
+    <div class="section-title">JSON Request Descriptor</div>
+    <button type="button" class="secondary small copy-btn" data-target="jsonDescriptor">
+      Copy
+    </button>
+    <textarea id="jsonDescriptor" readonly></textarea>
+
+    <div class="section-title">curl Command</div>
+    <button type="button" class="secondary small copy-btn" data-target="curlCommand">
+      Copy
+    </button>
+    <textarea id="curlCommand" readonly></textarea>
+  </div>
+
+<script>
+/* -----------------------------------------------------
+   Utility: trim trailing slash
+------------------------------------------------------ */
+function trimTrailingSlash(url) {
+  return url.replace(/\/+$/, "");
+}
+
+/* -----------------------------------------------------
+   Supported search parameters per resource
+------------------------------------------------------ */
+const searchParamsByResource = {
+  Patient: [
+    "_id", "name", "given", "family", "birthdate", "gender",
+    "identifier", "address", "postal-code", "phone", "email"
+  ],
+  Practitioner: [
+    "_id", "name", "given", "family", "identifier"
+  ],
+  Encounter: [
+    "_id", "patient", "date", "status", "class", "type"
+  ],
+  Observation: [
+    "_id", "patient", "code", "category", "date", "status"
+  ],
+  Condition: [
+    "_id", "patient", "code", "category", "clinical-status", "onset-date"
+  ],
+  Procedure: [
+    "_id", "patient", "code", "date", "performer"
+  ],
+  Immunization: [
+    "_id", "patient", "date", "status", "vaccine-code"
+  ],
+  MedicationRequest: [
+    "_id", "patient", "status", "intent", "authoredon"
+  ],
+  MedicationStatement: [
+    "_id", "patient", "status", "effective"
+  ],
+  DiagnosticReport: [
+    "_id", "patient", "date", "code", "status"
+  ],
+  Appointment: [
+    "_id", "patient", "status", "date"
+  ],
+  Schedule: [
+    "_id", "actor", "date"
+  ],
+  Slot: [
+    "_id", "schedule", "status", "start", "end"
+  ],
+  Coverage: [
+    "_id", "patient", "payor", "status"
+  ],
+  DocumentReference: [
+    "_id", "patient", "type", "status"
+  ],
+  RelatedPerson: [
+    "_id", "patient", "name", "relationship"
+  ],
+  Medication: [
+    "_id", "code", "status"
+  ],
+  Custom: []
+};
+
+
+/* -----------------------------------------------------
+   Dynamic parameter dropdown builder
+------------------------------------------------------ */
+function buildParamRow(resourceType, key = "", value = "") {
+  const params = searchParamsByResource[resourceType] || [];
+
+  const container = document.getElementById("paramContainer");
+
+  const row = document.createElement("div");
+  row.className = "param-row";
+
+  // 🔽 PRESET DROPDOWN
+  const select = document.createElement("select");
+  const customOption = document.createElement("option");
+  customOption.value = "";
+  customOption.textContent = "-- custom --";
+  select.appendChild(customOption);
+
+  params.forEach((p) => {
+    const opt = document.createElement("option");
+    opt.value = p;
+    opt.textContent = p;
+    select.appendChild(opt);
+  });
+
+  if (params.includes(key)) {
+    select.value = key;
+  }
+
+  // When dropdown changes -> update text field
+  select.addEventListener("change", () => {
+    if (select.value) keyInput.value = select.value;
+  });
+
+  // 📝 TEXT INPUT FOR KEY
+  const keyInput = document.createElement("input");
+  keyInput.type = "text";
+  keyInput.placeholder = "parameter name";
+  keyInput.value = key;
+
+  // On manual entry -> force dropdown to custom
+  keyInput.addEventListener("input", () => {
+    if (keyInput.value && params.includes(keyInput.value)) {
+      select.value = keyInput.value;
+    } else {
+      select.value = "";
+    }
+  });
+
+  // 📝 VALUE INPUT
+  const valueInput = document.createElement("input");
+  valueInput.type = "text";
+  valueInput.placeholder = "value";
+  valueInput.value = value;
+
+  // ❌ REMOVE BUTTON
+  const removeBtn = document.createElement("button");
+  removeBtn.type = "button";
+  removeBtn.className = "secondary small";
+  removeBtn.textContent = "✖";
+  removeBtn.addEventListener("click", () => {
+    container.removeChild(row);
+    if (!container.children.length) {
+      addParamRow(); // always keep 1 row
+    }
+  });
+
+  row.appendChild(select);
+  row.appendChild(keyInput);
+  row.appendChild(valueInput);
+  row.appendChild(removeBtn);
+
+  container.appendChild(row);
+}
+
+function addParamRow() {
+  const resourceType = getSelectedResourceType();
+  buildParamRow(resourceType);
+}
+
+/* -----------------------------------------------------
+   Resource type selection (for presets)
+------------------------------------------------------ */
+function getSelectedResourceType() {
+  const sel = document.getElementById("resourceType").value;
+  if (sel === "Custom") {
+    const custom = document.getElementById("customResourceType").value.trim();
+    return custom || "Resource";
+  }
+  return sel;
+}
+
+function updateParamRowsForResource() {
+  const resourceType = getSelectedResourceType();
+  const container = document.getElementById("paramContainer");
+
+  // Clear old rows
+  container.innerHTML = "";
+
+  // Add one fresh row using resource presets
+  buildParamRow(resourceType);
+}
+
+/* -----------------------------------------------------
+   Mode toggle
+------------------------------------------------------ */
+function updateModeUI() {
+  const isIdMode = document.getElementById("modeId").checked;
+  document.getElementById("byIdPanel").style.display = isIdMode ? "block" : "none";
+  document.getElementById("searchPanel").style.display = isIdMode ? "none" : "block";
+}
+
+/* -----------------------------------------------------
+   Build GET request
+------------------------------------------------------ */
+document.getElementById("buildBtn").addEventListener("click", () => {
+  const baseUrlRaw = document.getElementById("baseUrl").value.trim();
+  if (!baseUrlRaw) {
+    alert("Please enter a base URL.");
+    return;
+  }
+
+  const baseUrl = trimTrailingSlash(baseUrlRaw);
+  const resourceType = getSelectedResourceType();
+  const token = document.getElementById("authToken").value.trim();
+
+  let finalUrl = "";
+
+  const isById = document.getElementById("modeId").checked;
+
+  if (isById) {
+    const id = document.getElementById("resourceId").value.trim();
+    if (!id) {
+      alert("Enter a resource ID.");
+      return;
+    }
+    finalUrl = `${baseUrl}/${encodeURIComponent(resourceType)}/${encodeURIComponent(id)}`;
+  } else {
+    const params = new URLSearchParams();
+    const container = document.getElementById("paramContainer");
+
+    Array.from(container.children).forEach((row) => {
+      const [select, keyInput, valueInput] = row.querySelectorAll("select, input");
+      const k = keyInput.value.trim();
+      const v = valueInput.value.trim();
+      if (k && v) params.append(k, v);
+    });
+
+    const qs = params.toString();
+    finalUrl = `${baseUrl}/${encodeURIComponent(resourceType)}${qs ? "?" + qs : ""}`;
+  }
+
+  // JSON descriptor
+  const headers = { "Accept": "application/fhir+json" };
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
+  const descriptor = {
+    method: "GET",
+    url: finalUrl,
+    headers,
+  };
+
+  document.getElementById("finalUrl").value = finalUrl;
+  document.getElementById("jsonDescriptor").value = JSON.stringify(descriptor, null, 2);
+
+  // curl command
+	let curl = `curl -X GET -H "Accept: application/fhir+json"`;
+	if (token) curl += ` -H "Authorization: Bearer ${token}"`;
+	curl += ` "${finalUrl}"`;
+
+	document.getElementById("curlCommand").value = curl;
+
+});
+
+/* -----------------------------------------------------
+   Resource type + preset UI wiring
+------------------------------------------------------ */
+document.getElementById("resourceType").addEventListener("change", () => {
+  const wrapper = document.getElementById("customTypeWrapper");
+  wrapper.style.display = document.getElementById("resourceType").value === "Custom" ? "block" : "none";
+  updateParamRowsForResource();
+});
+
+document.getElementById("customResourceType").addEventListener("input", () => {
+  updateParamRowsForResource();
+});
+
+document.getElementById("modeId").addEventListener("change", updateModeUI);
+document.getElementById("modeSearch").addEventListener("change", updateModeUI);
+
+document.getElementById("addParamBtn").addEventListener("click", addParamRow);
+document.getElementById("clearBtn").addEventListener("click", () => {
+  document.getElementById("finalUrl").value = "";
+  document.getElementById("jsonDescriptor").value = "";
+  document.getElementById("curlCommand").value = "";
+});
+
+document.querySelectorAll(".copy-btn").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const el = document.getElementById(btn.dataset.target);
+    if (!el) return;
+    navigator.clipboard.writeText(el.value || "");
+    const old = btn.textContent;
+    btn.textContent = "Copied!";
+    setTimeout(() => (btn.textContent = old), 800);
+  });
+});
+
+/* Initial setup */
+updateModeUI();
+updateParamRowsForResource();
+</script>
+
+</body>
+</html>
