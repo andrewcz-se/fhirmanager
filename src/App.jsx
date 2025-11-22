@@ -4,8 +4,81 @@ import {
   FileJson, Copy, Search, Users, PlusCircle, ChevronRight,
   MapPin, Phone, Syringe, Pill, ChevronDown, ChevronUp, Fingerprint,
   ShieldAlert, CalendarClock, Stethoscope, Mail, XCircle, AlertTriangle,
-  ClipboardList // New icon for Procedures
+  ClipboardList, FileText, Sparkles, Heart // New icon for Conditions
 } from 'lucide-react';
+
+// --- SIMPLE MARKDOWN RENDERER ---
+// Handles Headers (#, ##), Lists (-, *), and Bold (**text**)
+const SimpleMarkdown = ({ content }) => {
+  if (!content) return null;
+
+  const lines = content.split('\n');
+  const elements = [];
+  let currentList = [];
+
+  const flushList = () => {
+    if (currentList.length > 0) {
+      elements.push(
+        <ul key={`list-${elements.length}`} className="list-disc pl-5 space-y-1 mb-3">
+          {currentList.map((item, i) => (
+            <li key={i} className="text-sm text-slate-700 pl-1">
+                <InlineMarkdown text={item} />
+            </li>
+          ))}
+        </ul>
+      );
+      currentList = [];
+    }
+  };
+
+  lines.forEach((line, index) => {
+    const trimmed = line.trim();
+    
+    if (!trimmed) {
+        flushList();
+        return;
+    }
+
+    // Handle Lists
+    if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+      currentList.push(trimmed.substring(2));
+    } else {
+      flushList();
+      
+      // Handle Headers
+      if (trimmed.startsWith('###')) {
+        elements.push(<h4 key={index} className="text-sm font-bold text-slate-900 mt-4 mb-2"><InlineMarkdown text={trimmed.replace(/^###\s*/, '')} /></h4>);
+      } else if (trimmed.startsWith('##')) {
+        elements.push(<h3 key={index} className="text-base font-bold text-slate-800 mt-5 mb-2 pb-1 border-b border-slate-100"><InlineMarkdown text={trimmed.replace(/^##\s*/, '')} /></h3>);
+      } else if (trimmed.startsWith('#')) {
+        elements.push(<h2 key={index} className="text-lg font-bold text-slate-800 mt-6 mb-3"><InlineMarkdown text={trimmed.replace(/^#\s*/, '')} /></h2>);
+      } else {
+        // Handle Paragraphs
+        elements.push(<p key={index} className="text-sm text-slate-700 leading-relaxed mb-2"><InlineMarkdown text={trimmed} /></p>);
+      }
+    }
+  });
+  
+  flushList(); 
+
+  return <div>{elements}</div>;
+};
+
+// Helper to parse **bold** text
+const InlineMarkdown = ({ text }) => {
+  if (!text) return null;
+  const parts = text.split(/(\*\*.*?\*\*)/g);
+  return (
+    <>
+      {parts.map((part, i) => {
+        if (part.startsWith('**') && part.endsWith('**')) {
+          return <strong key={i} className="font-semibold text-slate-900">{part.slice(2, -2)}</strong>;
+        }
+        return part;
+      })}
+    </>
+  );
+};
 
 export default function App() {
   // App State
@@ -68,7 +141,9 @@ export default function App() {
   const [medicationCache, setMedicationCache] = useState({}); 
   const [allergyCache, setAllergyCache] = useState({}); 
   const [appointmentCache, setAppointmentCache] = useState({});
-  const [procedureCache, setProcedureCache] = useState({}); // New Cache
+  const [procedureCache, setProcedureCache] = useState({}); 
+  const [conditionCache, setConditionCache] = useState({}); // New Cache for Conditions
+  const [summaryCache, setSummaryCache] = useState({}); 
 
   // --- HANDLERS: CREATE PATIENT ---
   const handleCreateChange = (e) => {
@@ -294,8 +369,8 @@ export default function App() {
         if (!cache[patientId]) {
             setCache(prev => ({ ...prev, [patientId]: { status: 'loading' } }));
             try {
-                // Default sort by date for clinical resources
-                const sortParam = resourceType === 'MedicationRequest' ? '' : '&_sort=-date';
+                // Update: Condition resource also does not support generic date sorting on this server
+                const sortParam = (resourceType === 'MedicationRequest' || resourceType === 'Condition') ? '' : '&_sort=-date';
                 const res = await fetch(`https://hapi.fhir.org/baseR4/${resourceType}?patient=${patientId}${sortParam}`, { headers: { 'Accept': 'application/fhir+json' } });
                 if(!res.ok) throw new Error(res.status);
                 const b = await res.json();
@@ -308,6 +383,7 @@ export default function App() {
     else if (type === 'med') simpleFetch('MedicationRequest', medicationCache, setMedicationCache);
     else if (type === 'allergy') simpleFetch('AllergyIntolerance', allergyCache, setAllergyCache);
     else if (type === 'proc') simpleFetch('Procedure', procedureCache, setProcedureCache);
+    else if (type === 'cond') simpleFetch('Condition', conditionCache, setConditionCache);
     else if (type === 'appt' && !appointmentCache[patientId]) {
         setAppointmentCache(prev => ({ ...prev, [patientId]: { status: 'loading' } }));
         try {
@@ -318,6 +394,56 @@ export default function App() {
           const practitioners = (bundle.entry || []).filter(e => e.resource.resourceType === 'Practitioner').reduce((acc, e) => { acc[e.resource.id] = e.resource; return acc; }, {});
           setAppointmentCache(prev => ({ ...prev, [patientId]: { status: 'success', data: { appointments, practitioners } } }));
         } catch (e) { setAppointmentCache(prev => ({ ...prev, [patientId]: { status: 'error', error: e.message } })); }
+    } 
+    // --- GEMINI CLINICAL SUMMARY ---
+    else if (type === 'summary') {
+        if (!summaryCache[patientId]) {
+            setSummaryCache(prev => ({ ...prev, [patientId]: { status: 'loading' } }));
+            try {
+                // 1. Fetch EVERYTHING for patient
+                const fhirRes = await fetch(`https://hapi.fhir.org/baseR4/Patient/${patientId}/$everything`, { headers: { 'Accept': 'application/fhir+json' } });
+                if (!fhirRes.ok) throw new Error(`Failed to fetch patient data: ${fhirRes.status}`);
+                const bundle = await fhirRes.json();
+
+                // 2. Sanitize JSON: Remove all demo data except Gender/DOB from Patient resource
+                const sanitizedBundle = {
+                    ...bundle,
+                    entry: (bundle.entry || []).map(e => {
+                        if (e.resource.resourceType === 'Patient') {
+                            return {
+                                ...e,
+                                resource: {
+                                    resourceType: 'Patient',
+                                    id: e.resource.id,
+                                    gender: e.resource.gender,
+                                    birthDate: e.resource.birthDate
+                                    // Explicitly excluding name, address, telecom, etc.
+                                }
+                            };
+                        }
+                        return e;
+                    })
+                };
+
+                // 3. Call Local Vercel API
+                const apiRes = await fetch('/api/generate-summary', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ bundle: sanitizedBundle })
+                });
+
+                if (!apiRes.ok) {
+                    const errorData = await apiRes.json().catch(() => ({}));
+                    throw new Error(errorData.error || `Server Error: ${apiRes.status}`);
+                }
+
+                const { summary } = await apiRes.json();
+                setSummaryCache(prev => ({ ...prev, [patientId]: { status: 'success', data: summary } }));
+
+            } catch (e) {
+                setSummaryCache(prev => ({ ...prev, [patientId]: { status: 'error', error: e.message } }));
+            }
+        }
     }
   };
 
@@ -403,36 +529,40 @@ export default function App() {
   };
 
   const getProcedureDetails = (proc) => {
-    // 1. Category
     let category = 'Uncategorized';
     if (proc.category) {
         category = proc.category.text || proc.category.coding?.[0]?.display || proc.category.coding?.[0]?.code || category;
-        // Add system if available in coding
         const sys = proc.category.coding?.[0]?.system;
         if(sys) category += ` (${sys.split('/').pop()})`;
     }
-
-    // 2. Code (Name of Procedure)
-    let code = 'Unknown Procedure';
-    let codeDetails = '';
-    if (proc.code) {
-        code = proc.code.text || proc.code.coding?.[0]?.display || 'Unknown Procedure';
-        const c = proc.code.coding?.[0];
-        if (c) {
-            codeDetails = `${c.code} [${c.system}]`;
-        }
-    }
-
-    // 3. Performed Date
+    let code = proc.code?.text || proc.code?.coding?.[0]?.display || 'Unknown Procedure';
+    let codeDetails = proc.code?.coding?.[0] ? `${proc.code.coding[0].code} [${proc.code.coding[0].system}]` : '';
     let performed = 'Unknown Date';
     if (proc.performedDateTime) performed = new Date(proc.performedDateTime).toLocaleString();
     else if (proc.performedPeriod) performed = `${new Date(proc.performedPeriod.start).toLocaleDateString()} - ${new Date(proc.performedPeriod.end).toLocaleDateString()}`;
     else if (proc.performedString) performed = proc.performedString;
-
-    // 4. Performer
     const performer = proc.performer?.[0]?.actor?.display || 'Unknown Performer';
-
     return { status: proc.status, category, code, codeDetails, performed, performer };
+  };
+
+  const getConditionDetails = (cond) => {
+    const clinicalStatus = cond.clinicalStatus?.coding?.[0]?.code || 'unknown';
+    const verificationStatus = cond.verificationStatus?.coding?.[0]?.code || 'unknown';
+    
+    let category = 'Uncategorized';
+    if (cond.category && cond.category.length > 0) {
+        category = cond.category.map(c => c.text || c.coding?.[0]?.display || 'Unknown').join(', ');
+    }
+
+    const code = cond.code?.text || cond.code?.coding?.[0]?.display || 'Unknown Condition';
+    const codeSystem = cond.code?.coding?.[0]?.system?.split('/').pop() || '';
+    const codeValue = cond.code?.coding?.[0]?.code || '';
+    const codeDetails = codeValue ? `${codeValue} ${codeSystem ? `[${codeSystem}]` : ''}` : '';
+
+    const recordedDate = cond.recordedDate ? new Date(cond.recordedDate).toLocaleDateString() : null;
+    const onset = cond.onsetDateTime ? new Date(cond.onsetDateTime).toLocaleDateString() : (cond.onsetString || null);
+
+    return { clinicalStatus, verificationStatus, category, code, codeDetails, recordedDate, onset };
   };
 
   return (
@@ -704,6 +834,17 @@ export default function App() {
 
                         {/* Action Bar */}
                         <div className="mt-4 pt-3 border-t border-slate-100 flex flex-wrap gap-3 justify-end">
+                            {/* Clinical Summary (AI) Button */}
+                            <button 
+                                onClick={() => toggleSection(patient.id, 'summary')}
+                                className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg transition-all
+                                    ${expandedSection === `${patient.id}-summary` ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}
+                                `}
+                            >
+                                <Sparkles className="w-4 h-4" /> Clinical Summary
+                                {expandedSection === `${patient.id}-summary` ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                            </button>
+
                             {/* Appointments Button */}
                             <button 
                                 onClick={() => toggleSection(patient.id, 'appt')}
@@ -713,6 +854,17 @@ export default function App() {
                             >
                                 <CalendarClock className="w-4 h-4" /> Appointments
                                 {expandedSection === `${patient.id}-appt` ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                            </button>
+
+                            {/* Conditions Button */}
+                            <button 
+                                onClick={() => toggleSection(patient.id, 'cond')}
+                                className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg transition-all
+                                    ${expandedSection === `${patient.id}-cond` ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}
+                                `}
+                            >
+                                <Heart className="w-4 h-4" /> Conditions
+                                {expandedSection === `${patient.id}-cond` ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                             </button>
 
                             {/* Procedures Button */}
@@ -763,6 +915,40 @@ export default function App() {
 
                       {/* --- EXPANDABLE PANELS --- */}
                       
+                      {/* Clinical Summary Panel (NEW) */}
+                      {expandedSection === `${patient.id}-summary` && (
+                        <div className="bg-emerald-50 border-t border-emerald-100 p-4 animate-in slide-in-from-top-2">
+                             {(!summaryCache[patient.id] || summaryCache[patient.id].status === 'loading') && (
+                                <div className="flex flex-col items-center justify-center py-8 text-emerald-700 gap-3">
+                                    <Sparkles className="w-6 h-6 animate-pulse text-emerald-500" />
+                                    <span className="text-sm font-medium">Analyzing patient records with AI...</span>
+                                </div>
+                             )}
+                             {summaryCache[patient.id]?.status === 'error' && (
+                                <div className="flex items-center gap-2 text-red-600 text-sm p-3 bg-red-50 rounded border border-red-100">
+                                    <AlertTriangle className="w-5 h-5" />
+                                    <div>
+                                        <p className="font-bold">Generation Failed</p>
+                                        <p className="text-xs">{summaryCache[patient.id].error}</p>
+                                    </div>
+                                </div>
+                             )}
+                             {summaryCache[patient.id]?.status === 'success' && (
+                                <div className="bg-white p-6 rounded-lg border border-emerald-100 shadow-sm">
+                                    <div className="flex items-center gap-2 mb-4 pb-2 border-b border-slate-100">
+                                        <Sparkles className="w-5 h-5 text-emerald-500" />
+                                        <h3 className="font-bold text-slate-800">Clinical Summary</h3>
+                                        <span className="text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full ml-auto">AI Generated</span>
+                                    </div>
+                                    {/* Custom Markdown Renderer */}
+                                    <div className="max-w-none text-slate-700 font-sans leading-relaxed">
+                                        <SimpleMarkdown content={summaryCache[patient.id].data} />
+                                    </div>
+                                </div>
+                             )}
+                        </div>
+                      )}
+
                       {/* Appointments Panel */}
                       {expandedSection === `${patient.id}-appt` && (
                         <div className="bg-blue-50 border-t border-blue-100 p-4 animate-in slide-in-from-top-2">
@@ -937,6 +1123,55 @@ export default function App() {
                                                             <p><span className="font-semibold text-slate-500">Category:</span> {details.category}</p>
                                                             {details.codeDetails && <p className="font-mono text-[10px] text-slate-400">{details.codeDetails}</p>}
                                                             {details.performer !== 'Unknown Performer' && <p><span className="font-semibold text-slate-500">Performer:</span> {details.performer}</p>}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
+                             )}
+                        </div>
+                      )}
+
+                      {/* Conditions Panel (NEW) */}
+                      {expandedSection === `${patient.id}-cond` && (
+                        <div className="bg-rose-50 border-t border-rose-100 p-4 animate-in slide-in-from-top-2">
+                             {(!conditionCache[patient.id] || conditionCache[patient.id].status === 'loading') && (
+                                <div className="flex items-center justify-center py-4 text-rose-600 gap-2"><div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" /><span className="text-sm">Loading records...</span></div>
+                             )}
+                             {conditionCache[patient.id]?.status === 'error' && <div className="flex items-center gap-2 text-red-600 text-sm p-2 bg-red-50 rounded border border-red-100"><AlertCircle className="w-4 h-4" />{conditionCache[patient.id].error}</div>}
+                             {conditionCache[patient.id]?.status === 'success' && (
+                                <div>
+                                    {conditionCache[patient.id].data.length === 0 ? (
+                                        <p className="text-slate-500 text-sm text-center py-2 italic">No conditions found for this patient.</p>
+                                    ) : (
+                                        <div className="space-y-3">
+                                            {conditionCache[patient.id].data.map((cond) => {
+                                                const details = getConditionDetails(cond);
+                                                return (
+                                                    <div key={cond.id} className="bg-white p-3 rounded border border-rose-100 shadow-sm">
+                                                        <div className="flex justify-between items-start">
+                                                            <h5 className="font-medium text-slate-800 text-sm flex items-center gap-2">
+                                                                {details.code}
+                                                            </h5>
+                                                            <span className={`text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded ${
+                                                                details.clinicalStatus === 'active' ? 'bg-red-100 text-red-700' : 
+                                                                details.clinicalStatus === 'resolved' ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'
+                                                            }`}>
+                                                                {details.clinicalStatus}
+                                                            </span>
+                                                        </div>
+                                                        
+                                                        <div className="text-xs text-slate-600 mt-1 space-y-1">
+                                                            <div className="flex flex-wrap gap-2 mb-1">
+                                                                {details.verificationStatus !== 'unknown' && <span className="bg-slate-50 px-2 py-0.5 rounded border border-slate-100 text-slate-500">Verif: {details.verificationStatus}</span>}
+                                                                {details.category !== 'Uncategorized' && <span className="bg-slate-50 px-2 py-0.5 rounded border border-slate-100 text-slate-500">Cat: {details.category}</span>}
+                                                            </div>
+                                                            
+                                                            {details.onset && <p><span className="font-semibold text-slate-500">Onset:</span> {details.onset}</p>}
+                                                            {details.recordedDate && <p><span className="font-semibold text-slate-500">Recorded:</span> {details.recordedDate}</p>}
+                                                            {details.codeDetails && <p className="font-mono text-[10px] text-slate-400">{details.codeDetails}</p>}
                                                         </div>
                                                     </div>
                                                 );
