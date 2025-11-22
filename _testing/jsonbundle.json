@@ -1,0 +1,114 @@
+{
+  "resourceType": "Bundle",
+  "type": "batch",
+  "entry": [
+    {
+      "request": {
+        "method": "POST",
+        "url": "AllergyIntolerance"
+      },
+      "resource": {
+        "resourceType": "AllergyIntolerance",
+        "clinicalStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/allergyintolerance-clinical",
+              "code": "active"
+            }
+          ]
+        },
+        "verificationStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/allergyintolerance-verification",
+              "code": "confirmed"
+            }
+          ]
+        },
+        "type": "allergy",
+        "category": ["medication"],
+        "criticality": "high",
+        "code": {
+          "coding": [
+            {
+              "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+              "code": "2670",
+              "display": "Penicillin"
+            }
+          ],
+          "text": "Penicillin allergy"
+        },
+        "patient": {
+          "reference": "Patient/53063266"
+        },
+        "reaction": [
+          {
+            "manifestation": [
+              {
+                "coding": [
+                  {
+                    "system": "http://snomed.info/sct",
+                    "code": "271807003",
+                    "display": "Skin rash"
+                  }
+                ],
+                "text": "Rash"
+              }
+            ],
+            "description": "Allergic skin reaction",
+            "severity": "moderate"
+          }
+        ]
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "Procedure"
+      },
+      "resource": {
+        "resourceType": "Procedure",
+        "status": "completed",
+        "code": {
+          "coding": [
+            {
+              "system": "http://snomed.info/sct",
+              "code": "80146002",
+              "display": "Appendectomy"
+            }
+          ],
+          "text": "Appendectomy"
+        },
+        "subject": {
+          "reference": "Patient/53063266"
+        },
+        "performedDateTime": "2024-01-10"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "Immunization"
+      },
+      "resource": {
+        "resourceType": "Immunization",
+        "status": "completed",
+        "vaccineCode": {
+          "coding": [
+            {
+              "system": "http://hl7.org/fhir/sid/cvx",
+              "code": "207",
+              "display": "COVID-19 mRNA vaccine"
+            }
+          ],
+          "text": "COVID-19 mRNA Vaccine"
+        },
+        "patient": {
+          "reference": "Patient/53063266"
+        },
+        "occurrenceDateTime": "2024-02-01",
+        "primarySource": true
+      }
+    }
+  ]
+}
