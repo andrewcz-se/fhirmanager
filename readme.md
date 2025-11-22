@@ -57,6 +57,12 @@ Retrievals are currently cached for the entire session. To force a new retrieval
 
 1. Press **Clinical Summary** to send an anonymised extract of the patient's entire history to Gemini and receive a summary of the patient's medical record.
 
+### **Test Messages**
+
+* The **_testing** folder contains:
+  * Example FHIR R4 JSON bundle files for testing various resource types.
+  * An HTML tool (_testing/resource-creator.html) for interactively building FHIR resources and bundles with some presets for the main Resources.
+
 ## **API Endpoint**
 
 This application connects to the **public** HAPI FHIR Test Server:
