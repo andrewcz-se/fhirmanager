@@ -1,6 +1,6 @@
 # **FHIR Patient Manager**
 
-A test application that lets you view FHIR resources stored on the HAPI FHIR R4 public test server. This application allows users to create new patients and appointments, search for existing records, and view associated clinical history. I created this application as a shell and precursor to start development on some AI Agent based FHIR work.
+A test application that lets you view FHIR resources stored on the HAPI FHIR R4 public test server. This application allows users to create new patients and appointments, search for existing records, and view associated clinical history. I created this application as a shell and precursor to start development on some AI Agent based FHIR work, starting with Clinical Summaries.
 
 ## **Features**
 
