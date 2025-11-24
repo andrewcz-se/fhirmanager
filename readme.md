@@ -61,8 +61,6 @@ Retrievals are currently cached for the entire session. To force a new retrieval
 
 * The **_testing** folder contains:
   * Example FHIR R4 JSON bundle files for testing various resource types.
-  * An HTML tool (_testing/resource-creator.html) for interactively building HAPI compatible FHIR resources and bundles with some presets for the main Resources.
-  * An HTML tool (_testing/oh-resource-creator.html) for interactively building Oracle Health R4 FHIR compatible FHIR resources with some presets for the main Resource search parameters.
 
 ## **API Endpoint**
 
